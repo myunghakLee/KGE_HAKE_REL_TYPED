@@ -390,7 +390,51 @@ class ModE(KGEModel):
         )
 
     def func(self, head, head_type, rel, tail, tail_type, batch_type):
-        return self.gamma.item() - torch.norm((head + head_type) * rel - (tail + tail_type), p=1, dim=2)
+        return self.gamma.item() - torch.norm(head * rel - tail, p=1, dim=2)
+
+
+class ModE_typed(KGEModel):
+    def __init__(self, num_entity, num_relation, num_type, hidden_dim, gamma):
+        super(ModE_typed, self).__init__()
+        self.num_entity = num_entity
+        self.num_relation = num_relation
+        self.hidden_dim = hidden_dim
+        self.epsilon = 2.0
+
+        self.gamma = nn.Parameter(
+            torch.Tensor([gamma]),
+            requires_grad=False
+        )
+
+        self.embedding_range = nn.Parameter(
+            torch.Tensor([(self.gamma.item() + self.epsilon) / hidden_dim]),
+            requires_grad=False
+        )
+
+        self.entity_embedding = nn.Parameter(torch.zeros(num_entity, hidden_dim))
+        nn.init.uniform_(
+            tensor=self.entity_embedding,
+            a=-self.embedding_range.item(),
+            b=self.embedding_range.item()
+        )
+
+        self.relation_embedding = nn.Parameter(torch.zeros(num_relation, hidden_dim*2))
+        nn.init.uniform_(
+            tensor=self.relation_embedding,
+            a=-self.embedding_range.item(),
+            b=self.embedding_range.item()
+        )
+        self.type_embedding = nn.Parameter(torch.zeros(num_type, hidden_dim))
+        nn.init.uniform_(
+            tensor=self.type_embedding,
+            a=-self.embedding_range.item(),
+            b=self.embedding_range.item()
+        )
+
+    def func(self, head, head_type, rel, tail, tail_type, batch_type):
+        rel_e, rel_typed = torch.chunk(rel, 2, dim=2)
+        
+        return self.gamma.item() - (0.5*torch.norm(head * rel_e - tail, p=1, dim=2) + 0.5*torch.norm(head * rel_typed - tail, p=1, dim=2))
 
 
 class HAKE(KGEModel):

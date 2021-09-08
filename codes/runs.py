@@ -10,7 +10,7 @@ import torch
 
 from torch.utils.data import DataLoader
 
-from models import KGEModel, ModE, HAKE
+from models import KGEModel, ModE, HAKE, ModE_typed
 
 from data import TrainDataset, BatchType, ModeType, DataReader
 from data import BidirectionalOneShotIterator
@@ -130,6 +130,7 @@ def log_metrics(mode, step, metrics):
 
 
 def main(args):
+    print(vars(args))
     if (not args.do_train) and (not args.do_valid) and (not args.do_test):
         raise ValueError('one of train/val/test mode must be choosed.')
 
@@ -142,7 +143,9 @@ def main(args):
         raise ValueError('Where do you want to save your trained model?')
 
     if args.save_path and not os.path.exists(args.save_path):
+        print("make_folders")
         os.makedirs(args.save_path)
+    print("copy files")
     copyfile('codes/runs.py',args.save_path + "/runs.py")
     copyfile('codes/data.py',args.save_path + "/data.py")
     copyfile('codes/models.py',args.save_path + "/models.py")
@@ -172,6 +175,8 @@ def main(args):
         kge_model = ModE(num_entity, num_relation, num_type, args.hidden_dim, args.gamma)
     elif args.model == 'HAKE':
         kge_model = HAKE(num_entity, num_relation, num_type, args.hidden_dim, args.gamma, args.modulus_weight, args.phase_weight)
+    elif args.model == 'ModE_typed':
+        kge_model = ModE_typed(num_entity, num_relation, num_type, args.hidden_dim, args.gamma)
     else:
         assert False, "args.model is wrong"
 
