@@ -227,6 +227,8 @@ class TrainDataset(Dataset):
 class TestDataset(Dataset):
     def __init__(self, data_reader: DataReader, mode: ModeType, batch_type: BatchType):
         self.triple_set = set(data_reader.train_data + data_reader.valid_data + data_reader.test_data)
+
+
         if mode == ModeType.VALID:
             self.triples = data_reader.valid_data
         elif mode == ModeType.TEST:
@@ -256,18 +258,19 @@ class TestDataset(Dataset):
         return self.len
 
     def __getitem__(self, idx):
-        head, head_type, relation, tail, tail_type = self.triples[idx]
-
+        head, head_type, relation, tail, tail_type = self.triples[idx] # BatchType이 relation일 경우 head_type과 tail_type은 무조건 -1
+        
+        # tmp는 negative sample일 때만 (0, num)으로 만든다. 단 현재의 positive sample은 예외적으로 GT에 있음에도 (0, num으로 만든다.)
         if self.batch_type == BatchType.HEAD_BATCH:
-            tmp = [(0, rand_head) if (rand_head, relation, tail) not in self.triple_set
+            tmp = [(0, rand_head) if (rand_head, self.entity2type_dict[rand_head], relation, tail, tail_type) not in self.triple_set
                    else (-1, head) for rand_head in range(self.num_entity)]
             tmp[head] = (0, head)
         elif self.batch_type == BatchType.TAIL_BATCH:
-            tmp = [(0, rand_tail) if (head, relation, rand_tail) not in self.triple_set
+            tmp = [(0, rand_tail) if (head, head_type, relation, rand_tail, self.entity2type_dict[rand_tail]) not in self.triple_set
                    else (-1, tail) for rand_tail in range(self.num_entity)]
             tmp[tail] = (0, tail)
         elif self.batch_type == BatchType.REL_BATCH:
-            tmp = [(0, rand_rel) if (head, rand_rel, tail) not in self.triple_set
+            tmp = [(0, rand_rel) if (head, head_type, rand_rel, tail, tail_type) not in self.triple_set
                    else (-1, relation) for rand_rel in range(self.num_relation)]
             tmp[relation] = (0, relation)
         else:

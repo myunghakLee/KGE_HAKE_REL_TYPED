@@ -308,9 +308,9 @@ class KGEModel(nn.Module, ABC):
                     if batch_type == BatchType.HEAD_BATCH:
                         positive_arg = positive_sample[:, 0]
                     elif batch_type == BatchType.TAIL_BATCH:
-                        positive_arg = positive_sample[:, 3]
-                    elif batch_type == BatchType.REL_BATCH:
                         positive_arg = positive_sample[:, 2]
+                    elif batch_type == BatchType.REL_BATCH:
+                        positive_arg = positive_sample[:, 1]
                     else:
                         raise ValueError('mode %s not supported' % mode)
 
