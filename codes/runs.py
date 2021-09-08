@@ -10,7 +10,7 @@ import torch
 
 from torch.utils.data import DataLoader
 
-from models import KGEModel, ModE, HAKE, ModE_typed
+from models import KGEModel, ModE, HAKE, ModE_typed, HAKE_typed
 
 from data import TrainDataset, BatchType, ModeType, DataReader
 from data import BidirectionalOneShotIterator
@@ -177,6 +177,8 @@ def main(args):
         kge_model = HAKE(num_entity, num_relation, num_type, args.hidden_dim, args.gamma, args.modulus_weight, args.phase_weight)
     elif args.model == 'ModE_typed':
         kge_model = ModE_typed(num_entity, num_relation, num_type, args.hidden_dim, args.gamma)
+    elif args.model == 'HAKE_typed':
+        kge_model = HAKE_typed(num_entity, num_relation, num_type, args.hidden_dim, args.gamma, args.modulus_weight, args.phase_weight)
     else:
         assert False, "args.model is wrong"
 
