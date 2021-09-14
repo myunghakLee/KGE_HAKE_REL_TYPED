@@ -242,8 +242,9 @@ class TestDataset(Dataset):
         self.mode = mode
         self.batch_type = batch_type
 
-        if self.batch_type == BatchType.REL_BATCH:
-            self.entity2type_dict = {}
+#         if self.batch_type == BatchType.REL_BATCH:
+        if True:
+            self.entity2type_dict = {} # entity_id -> type_id
             for d in data_reader.train_data:
                 self.entity2type_dict[d[0]] = d[1]
                 self.entity2type_dict[d[3]] = d[4]
@@ -262,17 +263,17 @@ class TestDataset(Dataset):
         
         # tmp는 negative sample일 때만 (0, num)으로 만든다. 단 현재의 positive sample은 예외적으로 GT에 있음에도 (0, num으로 만든다.)
         if self.batch_type == BatchType.HEAD_BATCH:
-            tmp = [(0, rand_head) if (rand_head, self.entity2type_dict[rand_head], relation, tail, tail_type) not in self.triple_set
-                   else (-1, head) for rand_head in range(self.num_entity)]
-            tmp[head] = (0, head)
+            tmp = [(0, rand_head, self.entity2type_dict[rand_head]) if (rand_head, self.entity2type_dict[rand_head], relation, tail, tail_type) not in self.triple_set
+                   else (-1, head, self.entity2type_dict[head]) for rand_head in range(self.num_entity)]
+            tmp[head] = (0, head, self.entity2type_dict[head])
         elif self.batch_type == BatchType.TAIL_BATCH:
-            tmp = [(0, rand_tail) if (head, head_type, relation, rand_tail, self.entity2type_dict[rand_tail]) not in self.triple_set
-                   else (-1, tail) for rand_tail in range(self.num_entity)]
-            tmp[tail] = (0, tail)
+            tmp = [(0, rand_tail, self.entity2type_dict[rand_tail]) if (head, head_type, relation, rand_tail, self.entity2type_dict[rand_tail]) not in self.triple_set
+                   else (-1, tail, self.entity2type_dict[tail]) for rand_tail in range(self.num_entity)]
+            tmp[tail] = (0, tail, self.entity2type_dict[tail])
         elif self.batch_type == BatchType.REL_BATCH:
-            tmp = [(0, rand_rel) if (head, head_type, rand_rel, tail, tail_type) not in self.triple_set
-                   else (-1, relation) for rand_rel in range(self.num_relation)]
-            tmp[relation] = (0, relation)
+            tmp = [(0, rand_rel, -1) if (head, head_type, rand_rel, tail, tail_type) not in self.triple_set
+                   else (-1, relation, -1) for rand_rel in range(self.num_relation)]
+            tmp[relation] = (0, relation, -1)
         else:
             raise ValueError('negative batch type {} not supported'.format(self.mode))
 
@@ -282,7 +283,8 @@ class TestDataset(Dataset):
 
         positive_sample = torch.LongTensor((head, head_type, relation, tail, tail_type))
         if self.batch_type != BatchType.REL_BATCH:
-            negative_sample_type = torch.tensor([self.entity2type_dict[d] for d in negative_sample])
+            negative_sample_type = tmp[:,2]
+#             negative_sample_type = torch.tensor([self.entity2type_dict[d.item()] for d in negative_sample])
         else:
             negative_sample_type = torch.tensor([-1.0])# debuging용, 원래 있으면 안됨
         return positive_sample, negative_sample, negative_sample_type, filter_bias, self.batch_type
@@ -306,12 +308,12 @@ class BidirectionalOneShotIterator(object):
         self.step = 0
 
     def __next__(self):
-        # self.step += 1
-        # if self.step % 2 == 0:
-        #     data = next(self.iterator_head)
-        # else:
-        #     data = next(self.iterator_tail)
-        data = next(self.iterator_rel)
+        self.step += 1
+        if self.step % 2 == 0:
+            data = next(self.iterator_head)
+        else:
+            data = next(self.iterator_tail)
+#         data = next(self.iterator_rel)
         return data
 
     @staticmethod
