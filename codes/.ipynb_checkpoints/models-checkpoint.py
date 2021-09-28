@@ -58,6 +58,7 @@ class KGEModel(nn.Module, ABC):
                     - positive_sample: tensor with shape [batch_size, 3]
                     - negative_sample: tensor with shape [batch_size, negative_sample_size]
         """
+        
         if batch_type == BatchType.SINGLE:
             head = torch.index_select(
                 self.entity_embedding,
@@ -151,7 +152,7 @@ class KGEModel(nn.Module, ABC):
                 index=tail_part.view(-1)
             ).view(batch_size, negative_sample_size, -1)
 
-            tail = torch.index_select(
+            tail_type = torch.index_select(
                 self.type_embedding,
                 dim=0,
                 index=negative_type_part.view(-1)
@@ -282,8 +283,8 @@ class KGEModel(nn.Module, ABC):
             collate_fn=TestDataset.collate_fn
         )        
 
-        # test_dataset_list = [test_dataloader_head, test_dataloader_tail]
-        test_dataset_list = [test_dataloader_rel]  # 여기 수정
+        test_dataset_list = [test_dataloader_head, test_dataloader_tail]
+#         test_dataset_list = [test_dataloader_rel]  # 여기 수정
 
         logs = []
 
@@ -295,6 +296,7 @@ class KGEModel(nn.Module, ABC):
                 for positive_sample, negative_sample, negative_sample_type, filter_bias, batch_type in test_dataset:
                     positive_sample = positive_sample.cuda()
                     negative_sample = negative_sample.cuda()
+                    negative_sample_type = negative_sample_type.cuda() # 이거 없었는데 왜 오류 안났지??
                     filter_bias = filter_bias.cuda()
 
                     batch_size = positive_sample.size(0)
@@ -308,9 +310,9 @@ class KGEModel(nn.Module, ABC):
                     if batch_type == BatchType.HEAD_BATCH:
                         positive_arg = positive_sample[:, 0]
                     elif batch_type == BatchType.TAIL_BATCH:
-                        positive_arg = positive_sample[:, 2]
+                        positive_arg = positive_sample[:, 3]
                     elif batch_type == BatchType.REL_BATCH:
-                        positive_arg = positive_sample[:, 1]
+                        positive_arg = positive_sample[:, 2]
                     else:
                         raise ValueError('mode %s not supported' % mode)
 
@@ -418,7 +420,7 @@ class ModE_typed(KGEModel):
             b=self.embedding_range.item()
         )
 
-        self.relation_embedding = nn.Parameter(torch.zeros(num_relation, hidden_dim*2))
+        self.relation_embedding = nn.Parameter(torch.zeros(num_relation, hidden_dim))
         nn.init.uniform_(
             tensor=self.relation_embedding,
             a=-self.embedding_range.item(),
@@ -432,9 +434,8 @@ class ModE_typed(KGEModel):
         )
 
     def func(self, head, head_type, rel, tail, tail_type, batch_type):
-        rel_e, rel_typed = torch.chunk(rel, 2, dim=2)
         
-        return self.gamma.item() - (0.5*torch.norm(head * rel_e - tail, p=1, dim=2) + 0.5*torch.norm(head * rel_typed - tail, p=1, dim=2))
+        return self.gamma.item() - torch.norm((head + head_type) + rel - (tail+tail_type), p=1, dim=2)
 
 
 class HAKE(KGEModel):
@@ -509,6 +510,89 @@ class HAKE(KGEModel):
         bias_relation[indicator] = -mod_relation[indicator]
 
         r_score = mod_head * (mod_relation + bias_relation) - mod_tail * (1 - bias_relation)
+
+        phase_score = torch.sum(torch.abs(torch.sin(phase_score / 2)), dim=2) * self.phase_weight
+        r_score = torch.norm(r_score, dim=2) * self.modulus_weight
+
+        return self.gamma.item() - (phase_score + r_score)
+
+
+class HAKE_typed(KGEModel):
+    def __init__(self, num_entity, num_relation, num_type, hidden_dim, gamma, modulus_weight=1.0, phase_weight=0.5):
+        super(HAKE_typed, self).__init__()
+        self.num_entity = num_entity
+        self.num_relation = num_relation
+        self.hidden_dim = hidden_dim
+        self.epsilon = 2.0
+
+        self.gamma = nn.Parameter(
+            torch.Tensor([gamma]),
+            requires_grad=False
+        )
+
+        self.embedding_range = nn.Parameter(
+            torch.Tensor([(self.gamma.item() + self.epsilon) / hidden_dim]),
+            requires_grad=False
+        )
+
+        self.entity_embedding = nn.Parameter(torch.zeros(num_entity, hidden_dim * 2))
+        nn.init.uniform_(
+            tensor=self.entity_embedding,
+            a=-self.embedding_range.item(),
+            b=self.embedding_range.item()
+        )
+
+        self.relation_embedding = nn.Parameter(torch.zeros(num_relation, hidden_dim * 3))
+        nn.init.uniform_(
+            tensor=self.relation_embedding,
+            a=-self.embedding_range.item(),
+            b=self.embedding_range.item()
+        )
+
+        self.type_embedding = nn.Parameter(torch.zeros(num_type, hidden_dim * 2))
+        nn.init.uniform_(
+            tensor=self.type_embedding,
+            a=-self.embedding_range.item(),
+            b=self.embedding_range.item()
+        )
+
+        nn.init.ones_(
+            tensor=self.relation_embedding[:, hidden_dim:2 * hidden_dim]
+        )
+
+        nn.init.zeros_(
+            tensor=self.relation_embedding[:, 2 * hidden_dim:3 * hidden_dim]
+        )
+
+        self.phase_weight = nn.Parameter(torch.Tensor([[phase_weight * self.embedding_range.item()]]))
+        self.modulus_weight = nn.Parameter(torch.Tensor([[modulus_weight]]))
+
+        self.pi = 3.14159262358979323846
+
+    def func(self, head, head_type, rel, tail, tail_type, batch_type):
+        phase_head, mod_head = torch.chunk(head, 2, dim=2)
+        phase_relation, mod_relation, bias_relation = torch.chunk(rel, 3, dim=2)
+        phase_tail, mod_tail = torch.chunk(tail, 2, dim=2)
+        phase_head_type, mode_head_type = torch.chunk(head_type, 2, dim=2)
+        phase_tail_type, mode_tail_type = torch.chunk(tail_type, 2, dim=2)
+
+        phase_head = phase_head / (self.embedding_range.item() / self.pi)
+        phase_head_type = phase_head_type / (self.embedding_range.item() / self.pi)
+        phase_relation = phase_relation / (self.embedding_range.item() / self.pi)
+        phase_tail = phase_tail / (self.embedding_range.item() / self.pi)
+        phase_tail_type = phase_tail_type / (self.embedding_range.item() / self.pi)
+
+        if batch_type == BatchType.HEAD_BATCH:
+            phase_score = (phase_head + phase_head_type) + (phase_relation - (phase_tail + phase_tail_type))
+        else:
+            phase_score = ((phase_head + phase_head_type) + phase_relation) - (phase_tail + phase_tail_type)
+
+        mod_relation = torch.abs(mod_relation)
+        bias_relation = torch.clamp(bias_relation, max=1)
+        indicator = (bias_relation < -mod_relation)
+        bias_relation[indicator] = -mod_relation[indicator]
+
+        r_score = (mod_head + mode_head_type) * (mod_relation + bias_relation) - (mod_tail + mode_tail_type) * (1 - bias_relation)
 
         phase_score = torch.sum(torch.abs(torch.sin(phase_score / 2)), dim=2) * self.phase_weight
         r_score = torch.norm(r_score, dim=2) * self.modulus_weight

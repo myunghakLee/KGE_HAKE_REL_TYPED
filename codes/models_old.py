@@ -58,7 +58,6 @@ class KGEModel(nn.Module, ABC):
                     - positive_sample: tensor with shape [batch_size, 3]
                     - negative_sample: tensor with shape [batch_size, negative_sample_size]
         """
-        
         if batch_type == BatchType.SINGLE:
             head = torch.index_select(
                 self.entity_embedding,
@@ -152,7 +151,7 @@ class KGEModel(nn.Module, ABC):
                 index=tail_part.view(-1)
             ).view(batch_size, negative_sample_size, -1)
 
-            tail_type = torch.index_select(
+            tail = torch.index_select(
                 self.type_embedding,
                 dim=0,
                 index=negative_type_part.view(-1)
@@ -283,8 +282,8 @@ class KGEModel(nn.Module, ABC):
             collate_fn=TestDataset.collate_fn
         )        
 
-        test_dataset_list = [test_dataloader_head, test_dataloader_tail]
-#         test_dataset_list = [test_dataloader_rel]  # 여기 수정
+        # test_dataset_list = [test_dataloader_head, test_dataloader_tail]
+        test_dataset_list = [test_dataloader_rel]  # 여기 수정
 
         logs = []
 
@@ -296,7 +295,6 @@ class KGEModel(nn.Module, ABC):
                 for positive_sample, negative_sample, negative_sample_type, filter_bias, batch_type in test_dataset:
                     positive_sample = positive_sample.cuda()
                     negative_sample = negative_sample.cuda()
-                    negative_sample_type = negative_sample_type.cuda() # 이거 없었는데 왜 오류 안났지??
                     filter_bias = filter_bias.cuda()
 
                     batch_size = positive_sample.size(0)
@@ -434,8 +432,7 @@ class ModE_typed(KGEModel):
         )
 
     def func(self, head, head_type, rel, tail, tail_type, batch_type):
-        
-        return self.gamma.item() - torch.norm((head + head_type) + rel - (tail+tail_type), p=1, dim=2)
+        return self.gamma.item() - torch.norm((head+head_type) * rel - (tail + tail_type), p=1, dim=2)
 
 
 class HAKE(KGEModel):

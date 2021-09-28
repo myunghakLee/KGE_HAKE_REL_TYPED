@@ -146,9 +146,9 @@ def main(args):
         print("make_folders")
         os.makedirs(args.save_path)
     print("copy files")
-    copyfile('codes/runs.py',args.save_path + "/runs.py")
-    copyfile('codes/data.py',args.save_path + "/data.py")
-    copyfile('codes/models.py',args.save_path + "/models.py")
+#     copyfile('codes/runs.py',args.save_path + "/runs.py")
+#     copyfile('codes/data.py',args.save_path + "/data.py")
+#     copyfile('codes/models.py',args.save_path + "/models.py")
 
 
     # Write logs to checkpoint and console
