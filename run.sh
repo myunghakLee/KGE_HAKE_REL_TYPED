@@ -33,6 +33,8 @@ if [ $MODE == "train" ]
 then
 
 echo "Start Training......"
+echo "Type Weight : ......" 
+echo $TYPE_WEIGHT
 
     if [ $MODEL == "HAKE" ]
     then
