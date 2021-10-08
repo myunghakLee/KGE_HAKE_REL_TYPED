@@ -25,8 +25,9 @@ ALPHA=${10}
 LEARNING_RATE=${11}
 MAX_STEPS=${12}
 TEST_BATCH_SIZE=${13}
-MODULUS_WEIGHT=${14}
-PHASE_WEIGHT=${15}
+TYPE_WEIGHT=${14}
+MODULUS_WEIGHT=${15}
+PHASE_WEIGHT=${16}
 
 if [ $MODE == "train" ]
 then
@@ -36,6 +37,7 @@ echo "Start Training......"
     if [ $MODEL == "HAKE" ]
     then
         CUDA_VISIBLE_DEVICES=$GPU_DEVICE python -u $CODE_PATH/runs.py --do_train \
+            --type_weight $TYPE_WEIGHT \
             --do_valid \
             --do_test \
             --data_path $FULL_DATA_PATH \
@@ -48,6 +50,7 @@ echo "Start Training......"
     elif [ $MODEL == "HAKE_typed" ]
     then
         CUDA_VISIBLE_DEVICES=$GPU_DEVICE python -u $CODE_PATH/runs.py --do_train \
+            --type_weight $TYPE_WEIGHT \
             --do_valid \
             --do_test \
             --data_path $FULL_DATA_PATH \
@@ -60,6 +63,7 @@ echo "Start Training......"
      elif [ $MODEL == "ModE" ]
      then
          CUDA_VISIBLE_DEVICES=$GPU_DEVICE python -u $CODE_PATH/runs.py --do_train \
+            --type_weight $TYPE_WEIGHT \
             --do_valid \
             --do_test \
             --data_path $FULL_DATA_PATH \
@@ -71,6 +75,7 @@ echo "Start Training......"
      elif [ $MODEL == "ModE_typed" ]
      then
          CUDA_VISIBLE_DEVICES=$GPU_DEVICE python -u $CODE_PATH/runs.py --do_train \
+            --type_weight $TYPE_WEIGHT \
             --do_valid \
             --do_test \
             --data_path $FULL_DATA_PATH \

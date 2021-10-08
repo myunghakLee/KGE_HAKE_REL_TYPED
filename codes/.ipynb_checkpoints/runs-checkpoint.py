@@ -50,6 +50,8 @@ def parse_args(args=None):
     parser.add_argument('--test_log_steps', default=1000, type=int, help='valid/test log every xx steps')
 
     parser.add_argument('--no_decay', action='store_true', help='Learning rate do not decay')
+    
+    parser.add_argument('--type_weight', type=float, default=0.5)
     return parser.parse_args(args)
 
 

@@ -21,7 +21,7 @@ class KGEModel(nn.Module, ABC):
     """
 
     @abstractmethod
-    def func(head, head_type, relation, tail, tail_type, batch_type):
+    def func(head, head_type, relation, tail, tail_type, type_weight, batch_type):
         """
         Different tensor shape for different batch types.
         BatchType.SINGLE:
@@ -41,7 +41,7 @@ class KGEModel(nn.Module, ABC):
         """
         ...
 
-    def forward(self, sample, batch_type=BatchType.SINGLE):
+    def forward(self, sample, type_weight, batch_type=BatchType.SINGLE):
         """
         Given the indexes in `sample`, extract the corresponding embeddings,
         and call func().
@@ -195,7 +195,7 @@ class KGEModel(nn.Module, ABC):
             raise ValueError('batch_type %s not supported!'.format(batch_type))
 
         # return scores
-        return self.func(head, head_type, relation, tail, tail_type, batch_type)
+        return self.func(head, head_type, relation, tail, tail_type, type_weight, batch_type)
 
     @staticmethod
     def train_step(model, optimizer, train_iterator, args):
@@ -215,13 +215,13 @@ class KGEModel(nn.Module, ABC):
         negative_sample_type = negative_sample_type.cuda() # 이거 없었는데 왜 오류 안났지??
 
         # negative scores
-        negative_score = model((positive_sample, negative_sample, negative_sample_type), batch_type=batch_type)  # shape: (1024, 16)
+        negative_score = model((positive_sample, negative_sample, negative_sample_type), type_weight=args.type_weight, batch_type=batch_type)  # shape: (1024, 16)
 
         negative_score = (F.softmax(negative_score * args.adversarial_temperature, dim=1).detach()
                           * F.logsigmoid(-negative_score)).sum(dim=1)
 
         # positive scores
-        positive_score = model(positive_sample)
+        positive_score = model(positive_sample, type_weight=args.type_weight)
 
         positive_score = F.logsigmoid(positive_score).squeeze(dim=1)
 
@@ -301,7 +301,7 @@ class KGEModel(nn.Module, ABC):
 
                     batch_size = positive_sample.size(0)
 
-                    score = model((positive_sample, negative_sample, negative_sample_type), batch_type)
+                    score = model((positive_sample, negative_sample, negative_sample_type), type_weight= args.type_weight, batch_type=batch_type)
                     score += filter_bias
 
                     # Explicitly sort all the entities to ensure that there is no test exposure bias
@@ -391,7 +391,7 @@ class ModE(KGEModel):
             b=self.embedding_range.item()
         )
 
-    def func(self, head, head_type, rel, tail, tail_type, batch_type):
+    def func(self, head, head_type, rel, tail, tail_type, type_weight, batch_type):
         return self.gamma.item() - torch.norm(head * rel - tail, p=1, dim=2)
 
 
@@ -433,9 +433,8 @@ class ModE_typed(KGEModel):
             b=self.embedding_range.item()
         )
 
-    def func(self, head, head_type, rel, tail, tail_type, batch_type):
-        
-        return self.gamma.item() - torch.norm((head + head_type) + rel - (tail+tail_type), p=1, dim=2)
+    def func(self, head, head_type, rel, tail, tail_type, type_weight, batch_type):
+        return self.gamma.item() - torch.norm((head + head_type * type_weight) * rel - (tail + tail_type * type_weight), p=1, dim=2)
 
 
 class HAKE(KGEModel):
@@ -490,7 +489,7 @@ class HAKE(KGEModel):
 
         self.pi = 3.14159262358979323846
 
-    def func(self, head, head_type, rel, tail, tail_type, batch_type):
+    def func(self, head, head_type, rel, tail, tail_type, type_weight, batch_type):
         phase_head, mod_head = torch.chunk(head, 2, dim=2)
         phase_relation, mod_relation, bias_relation = torch.chunk(rel, 3, dim=2)
         phase_tail, mod_tail = torch.chunk(tail, 2, dim=2)
@@ -569,7 +568,7 @@ class HAKE_typed(KGEModel):
 
         self.pi = 3.14159262358979323846
 
-    def func(self, head, head_type, rel, tail, tail_type, batch_type):
+    def func(self, head, head_type, rel, tail, tail_type, type_weight, batch_type):
         phase_head, mod_head = torch.chunk(head, 2, dim=2)
         phase_relation, mod_relation, bias_relation = torch.chunk(rel, 3, dim=2)
         phase_tail, mod_tail = torch.chunk(tail, 2, dim=2)
@@ -583,16 +582,17 @@ class HAKE_typed(KGEModel):
         phase_tail_type = phase_tail_type / (self.embedding_range.item() / self.pi)
 
         if batch_type == BatchType.HEAD_BATCH:
-            phase_score = (phase_head + phase_head_type) + (phase_relation - (phase_tail + phase_tail_type))
+            phase_score = (phase_head + phase_head_type*type_weight) + (phase_relation - (phase_tail + phase_tail_type*type_weight))
         else:
-            phase_score = ((phase_head + phase_head_type) + phase_relation) - (phase_tail + phase_tail_type)
+            phase_score = ((phase_head + phase_head_type*type_weight) + phase_relation) - (phase_tail + phase_tail_type*type_weight)
 
         mod_relation = torch.abs(mod_relation)
         bias_relation = torch.clamp(bias_relation, max=1)
         indicator = (bias_relation < -mod_relation)
         bias_relation[indicator] = -mod_relation[indicator]
 
-        r_score = (mod_head + mode_head_type) * (mod_relation + bias_relation) - (mod_tail + mode_tail_type) * (1 - bias_relation)
+        r_score = (mod_head + mode_head_type*type_weight) * (mod_relation + bias_relation)\
+                - (mod_tail + mode_tail_type*type_weight) * (1 - bias_relation)
 
         phase_score = torch.sum(torch.abs(torch.sin(phase_score / 2)), dim=2) * self.phase_weight
         r_score = torch.norm(r_score, dim=2) * self.modulus_weight
