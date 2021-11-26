@@ -1,3 +1,5 @@
+$\alpha$
+
 # HAKE: Hierarchy-Aware Knowledge Graph Embedding
 This is the code of paper **Learning Hierarchy-Aware Knowledge Graph Embeddings for Link Prediction.** *Zhanqiu Zhang, Jianyu Cai, Yongdong Zhang, Jie Wang.* AAAI 2020.  [arxiv](https://arxiv.org/abs/1911.09419)
 
